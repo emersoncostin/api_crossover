@@ -11,6 +11,7 @@ app.use(bodyParser.json());
 
 app.get('/returnScore/:applicationId', (req, res, next) =>{
 
+  
   ////////// 1st step
   axios.get('https://lr58e2fcx7.execute-api.us-east-1.amazonaws.com/Prod/login')
   .then((axiosRes) => {
@@ -93,6 +94,7 @@ app.get("/applyPosition", (req, res, next) => {
         headers: { Authorization: `Bearer ${token}`, 
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36' }
       };
+      console.log(config)
       applyOnCrossover(config);
     }else{
       res.send("Error getting token from Crossover");
@@ -189,10 +191,18 @@ function getLinkSurvey(surveyNumber, applicationId, config){
         console.log("First SURVEY: "+ testUrl)
         answerFirstSurvey( testUrl, applicationId, config);
       }else if(surveyNumber == 1){
-        if(axiosRes.data.totalSize == 2){
-          var testUrl = axiosRes.data.records[surveyNumber].Assessment_URL__c;
-          console.log("Second SURVEY: "+ testUrl)
-          answerSecondSurvey(testUrl, applicationId, config);
+        if(axiosRes.data.totalSize > 1){
+          // var testUrl = axiosRes.data.records[surveyNumber].Assessment_URL__c;
+          // console.log("Second SURVEY: "+ testUrl)
+          // answerSecondSurvey(testUrl, applicationId, config);
+          
+          var testUrl = axiosRes.data.records[surveyNumber].Id;
+          let arrayIds = []
+          console.log(axiosRes.data)
+          arrayIds.push(axiosRes.data.records[1].Id)
+          arrayIds.push(axiosRes.data.records[2].Id)
+          console.log("CCAT Survey ID: "+ arrayIds)
+          getCCATLink(arrayIds, config)
         }else{
           console.log("1 segundo foi pouco ao responder a PRIMEIRA questao")
           setTimeout(getLinkSurvey, 1000, 1, applicationId, config);
@@ -369,11 +379,12 @@ function answerSecondSurvey(testUrl, applicationId, config){
 }
 
 
-function getCCATLink(id, config){
+function getCCATLink(ids, config){
 
   let obj = {}
+  let results = []
 
-  axios.post('https://lr58e2fcx7.execute-api.us-east-1.amazonaws.com/Prod/assessment-results/'+id+'/get-url', obj, config)
+  axios.post('https://lr58e2fcx7.execute-api.us-east-1.amazonaws.com/Prod/assessment-results/'+ids[0]+'/get-url', obj, config)
   .then((axiosRes) => {
     console.log(`Apply on Crossover Status: ${axiosRes.status}`)
     //console.log(axiosRes.data)
@@ -381,8 +392,53 @@ function getCCATLink(id, config){
 
     if(axiosRes.data.assessmentSessionUrl){
       
+      let key = ''
+
+      if(axiosRes.data.assessmentSessionUrl.includes('ondemandassessment')){
+        key = 'CCAT'
+      }else{
+        key = 'PICA'
+      }
+      
+      let obj = {}
+      obj[key] = axiosRes.data.assessmentSessionUrl
+
       console.log(axiosRes.data.assessmentSessionUrl)
-      res.send(axiosRes.data.assessmentSessionUrl);
+
+      results.push(obj)
+      
+      axios.post('https://lr58e2fcx7.execute-api.us-east-1.amazonaws.com/Prod/assessment-results/'+ids[1]+'/get-url', obj, config)
+      .then((axiosRes) => {
+
+        if(axiosRes.data.assessmentSessionUrl){
+
+          let key = ''
+          if(axiosRes.data.assessmentSessionUrl.includes('ondemandassessment')){
+             key = 'CCAT'
+          }else{
+             key = 'PICA'
+          }
+          let obj = {}
+          obj[key] = axiosRes.data.assessmentSessionUrl
+    
+          console.log(axiosRes.data.assessmentSessionUrl)
+    
+          results.push(obj)
+          
+          console.log(results)
+          res.send(results)
+          
+        }else{
+
+          res.send("Error while getting PICA link");
+
+        }
+        
+
+      }).catch((error) => {
+        console.log(error)
+        res.send(error)
+      })
 
     }else{
 
@@ -397,6 +453,10 @@ function getCCATLink(id, config){
   })
 
 }
+
+
+
+
 
 
 });
